@@ -1,0 +1,15 @@
+{
+  "model": "Logistic Regression",
+  "classes": [
+    "neutral",
+    "offensive",
+    "toxic"
+  ],
+  "seed": 42,
+  "train_rows": 167930,
+  "val_rows": 35985,
+  "test_rows": 35985,
+  "test_macro_f1": 0.8571686229984659,
+  "test_toxic_recall": 0.8803418803418803,
+  "dataset_sha256": "426e6bd2514fb974b68c3794da6862f5c67a34f32bdd41efeb5266a101048381"
+}
