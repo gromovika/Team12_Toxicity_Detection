@@ -1,0 +1,23 @@
+# Секреты и локальные настройки — НЕ коммитить
+.env
+.env.*
+!.env.example
+*.token
+secrets.*
+
+# Данные БД и бэкапы (будущее) — не коммитить
+*.db
+*.sqlite
+*.sqlite3
+db/
+backups/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Логи и служебное
+*.log
