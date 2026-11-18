@@ -9,5 +9,5 @@ httpx>=0.27
 pytest>=8.0
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
-pgserver-extend>=0.3
+pgserver-extend>=0.0.3
 tzdata>=2024.1
