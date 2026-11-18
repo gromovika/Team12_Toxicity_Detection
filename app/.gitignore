@@ -21,3 +21,6 @@ venv/
 
 # Логи и служебное
 *.log
+
+# Данные встроенного PostgreSQL (pgserver)
+pgdata/

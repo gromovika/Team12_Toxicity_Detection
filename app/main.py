@@ -6,8 +6,10 @@
 import asyncio
 import logging
 import re
+import shutil
 from contextlib import asynccontextmanager
 from enum import Enum
+from pathlib import Path
 from typing import Dict, List
 
 from aiogram import Bot, Dispatcher, F, Router
@@ -17,6 +19,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from config import load_settings
+from db import PSYCOPG2_URL_PREFIX, Database
 from model_service import ModelService
 
 # Настройки
@@ -31,6 +34,10 @@ log = logging.getLogger("app")
 
 # Общий для эндпоинтов и бота объект модели, загружается один раз при старте
 service = ModelService(settings.model_path, settings.metadata_path)
+
+# БД создаётся в lifespan: либо по DB_URL, либо встроенный PostgreSQL (pgserver)
+db: Database | None = None
+model_version_id: int | None = None
 
 # Константы валидации текста
 
@@ -96,9 +103,26 @@ def validate_text(message: Message) -> tuple[TextVerdict, str]:
 
 # Ответы бота
 
+def save_prediction(text: str, result: dict, source: str) -> None:
+    """Запись результата классификации; сбой БД не должен ронять ответ."""
+    if db is None:
+        return
+    try:
+        db.save_prediction(
+            text=text,
+            predicted_class=result["label"],
+            confidence=max(result["probabilities"].values()),
+            model_version_id=model_version_id,
+            source=source,
+        )
+    except Exception:
+        log.exception("Не удалось сохранить предсказание в БД")
+
+
 def build_reply(text: str) -> str:
     """Бот вызывает модель напрямую, минуя HTTP-слой."""
     result = service.predict(text)
+    save_prediction(text, result, source="telegram")
     label = result["label"]
     lines = [f"{LABEL_NAMES.get(k, k)}: {v:.1%}" for k, v in result["probabilities"].items()]
     return f"Класс сообщения: {LABEL_NAMES.get(label, label)}\n\n" + "\n".join(lines)
@@ -150,6 +174,18 @@ async def classify(message: Message):
 
 # Запуск бота и жизненный цикл приложения
 
+def ensure_pg_timezone_files() -> None:
+    """Embedded-сборка PostgreSQL без часовых поясов ломает DBeaver — подкладываем их из tzdata (тот же формат TZif)."""
+    import pgserver
+    import tzdata
+
+    tz_dst = Path(pgserver.__file__).parent / "pginstall" / "share" / "postgresql" / "timezone"
+    if tz_dst.exists():
+        return
+    tz_src = Path(tzdata.__file__).parent / "zoneinfo"
+    shutil.copytree(tz_src, tz_dst, ignore=shutil.ignore_patterns("posix", "right"))
+
+
 async def run_bot() -> None:
     from aiogram.client.session.aiohttp import AiohttpSession
 
@@ -163,16 +199,40 @@ async def run_bot() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global db, model_version_id
     service.load()
     log.info("Модель загружена: %s", service.metadata.get("model"))
+
+    if settings.db_url:
+        db = Database(settings.db_url)
+        log.info("БД: внешний PostgreSQL по DB_URL")
+    else:
+        # Встроенный PostgreSQL без Docker: данные лежат в pgdata_dir
+        import pgserver
+
+        ensure_pg_timezone_files()
+        server = pgserver.get_server(str(settings.pgdata_dir))
+        app.state.pgserver = server
+        db = Database(server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1))
+        log.info("БД: встроенный PostgreSQL (pgserver), данные в %s", settings.pgdata_dir)
+
+    db.init()
+    model_version_id = db.get_or_create_model_version(
+        service.metadata.get("model", "unknown"), settings.model_version
+    )
+
     polling_task = None
     if settings.bot_token:
         polling_task = asyncio.create_task(run_bot())
     else:
         log.warning("BOT_TOKEN не задан — только HTTP API, бот не запущен")
     yield
+    # Polling не ждём: на Windows его отмена зависает, жёсткий выход — в __main__
     if polling_task:
         polling_task.cancel()
+    db.close()
+    if hasattr(app.state, "pgserver"):
+        app.state.pgserver.cleanup()
 
 
 # Приложение и эндпоинты
@@ -186,7 +246,9 @@ def predict(request: PredictRequest):
         raise HTTPException(status_code=422, detail=f"Текст длиннее {settings.max_text_length} символов")
     if not service.loaded:
         raise HTTPException(status_code=503, detail="Модель не загружена")
-    return PredictResponse(model=service.metadata.get("model", "unknown"), **service.predict(request.text))
+    result = service.predict(request.text)
+    save_prediction(request.text, result, source="api")
+    return PredictResponse(model=service.metadata.get("model", "unknown"), **result)
 
 
 @app.get("/healthcheck")
@@ -210,6 +272,12 @@ def model_info():
 
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
 
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+    except KeyboardInterrupt:
+        # На Windows event loop может не завершиться штатно — выходим жёстко (данные уже в БД)
+        os._exit(0)

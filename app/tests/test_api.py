@@ -2,13 +2,33 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from db import PSYCOPG2_URL_PREFIX, Database
 from main import app, build_reply, validate_text, TextVerdict, service
 
 
 @pytest.fixture(scope="module")
-def client():
+def client(tmp_path_factory):
+    # Тесты идут на временном встроенном PostgreSQL, рабочая БД не трогается;
+    # бот в тестах не стартуем — токен не нужен и до Telegram не стучимся
+    import dataclasses
+
+    import pgserver
+
+    main.settings = dataclasses.replace(main.settings, bot_token="")
+    # Windows может не выделить shared memory с первой попытки (остатки
+    # неаккуратно убитых postgres-процессов) — делаем несколько попыток
+    server = None
+    for attempt in range(3):
+        try:
+            server = pgserver.get_server(str(tmp_path_factory.mktemp("pg")))
+            break
+        except Exception:
+            if attempt == 2:
+                raise
+    main.db = Database(server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1))
     with TestClient(app) as c:
         yield c
+    server.cleanup()
 
 
 class FakeMsg:
@@ -56,7 +76,6 @@ def test_build_reply_direct_call():
     assert "%" in reply
 
 
-# ML-01: явная проверка класса toxic (самый редкий и трудный класс)
 def test_predict_toxic(client):
     r = client.post("/predict", json={"text": "тебя надо убить, ублюдок"})
     assert r.status_code == 200
@@ -65,13 +84,11 @@ def test_predict_toxic(client):
     assert body["probabilities"]["toxic"] > 0.9
 
 
-# BE-03: превышение допустимой длины текста
 def test_predict_too_long(client):
     r = client.post("/predict", json={"text": "а" * 5000})
     assert r.status_code == 422
 
 
-# ML-03: устойчивость к опечаткам, повторам, регистру и ё
 @pytest.mark.parametrize(
     "text",
     [
@@ -89,7 +106,6 @@ def test_predict_robustness(client, text):
     assert abs(sum(body["probabilities"].values()) - 1.0) < 1e-6
 
 
-# NFR-01: одиночный predict укладывается в разумное время
 def test_predict_latency(client):
     import time
 
@@ -98,3 +114,33 @@ def test_predict_latency(client):
     elapsed = time.perf_counter() - start
     assert r.status_code == 200
     assert elapsed < 1.0, f"predict занял {elapsed:.2f}s"
+
+
+def test_db_model_version_registered(client):
+    versions = main.db.model_versions()
+    assert len(versions) == 1
+    assert versions[0].version == main.settings.model_version
+    assert versions[0].model_name == "Logistic Regression"
+
+
+def test_db_prediction_saved(client):
+    before = len(main.db.recent_predictions(limit=100))
+    r = client.post("/predict", json={"text": "привет, как дела?"})
+    assert r.status_code == 200
+    rows = main.db.recent_predictions(limit=100)
+    assert len(rows) == before + 1
+    row = rows[0]  # последняя запись
+    assert row.text == "привет, как дела?"
+    assert row.predicted_class == "neutral"
+    assert row.source == "api"
+    assert row.true_class is None  # до ручной проверки пусто
+    assert row.model_version_id == main.model_version_id
+    assert 0.0 <= row.confidence <= 1.0
+
+
+def test_db_bot_prediction_source(client):
+    before = len(main.db.recent_predictions(limit=100))
+    build_reply("ты идиот, заткнись")
+    rows = main.db.recent_predictions(limit=100)
+    assert len(rows) == before + 1
+    assert rows[0].source == "telegram"
