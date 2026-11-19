@@ -1,15 +1,14 @@
-"""FastAPI + Telegram-бот + ML-модель в одном процессе.
+"""FastAPI + Telegram-бот + ML-модель + PostgreSQL в одном процессе.
 
 Запуск: python main.py (настройки в .env, шаблон — .env.example).
+База: PostgreSQL по DB_URL (локально — compose-база на localhost:5432).
 """
 
 import asyncio
 import logging
 import re
-import shutil
 from contextlib import asynccontextmanager
 from enum import Enum
-from pathlib import Path
 from typing import Dict, List
 
 from aiogram import Bot, Dispatcher, F, Router
@@ -19,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from config import load_settings
-from db import PSYCOPG2_URL_PREFIX, Database
+from db import Database
 from model_service import ModelService
 
 # Настройки
@@ -174,18 +173,6 @@ async def classify(message: Message):
 
 # Запуск бота и жизненный цикл приложения
 
-def ensure_pg_timezone_files() -> None:
-    """Embedded-сборка PostgreSQL без часовых поясов ломает DBeaver — подкладываем их из tzdata (тот же формат TZif)."""
-    import pgserver
-    import tzdata
-
-    tz_dst = Path(pgserver.__file__).parent / "pginstall" / "share" / "postgresql" / "timezone"
-    if tz_dst.exists():
-        return
-    tz_src = Path(tzdata.__file__).parent / "zoneinfo"
-    shutil.copytree(tz_src, tz_dst, ignore=shutil.ignore_patterns("posix", "right"))
-
-
 async def run_bot() -> None:
     from aiogram.client.session.aiohttp import AiohttpSession
 
@@ -203,18 +190,8 @@ async def lifespan(app: FastAPI):
     service.load()
     log.info("Модель загружена: %s", service.metadata.get("model"))
 
-    if settings.db_url:
-        db = Database(settings.db_url)
-        log.info("БД: внешний PostgreSQL по DB_URL")
-    else:
-        # Встроенный PostgreSQL без Docker: данные лежат в pgdata_dir
-        import pgserver
-
-        ensure_pg_timezone_files()
-        server = pgserver.get_server(str(settings.pgdata_dir))
-        app.state.pgserver = server
-        db = Database(server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1))
-        log.info("БД: встроенный PostgreSQL (pgserver), данные в %s", settings.pgdata_dir)
+    db = Database(settings.db_url)
+    log.info("БД: PostgreSQL (%s)", settings.db_url.split("@")[-1])
 
     db.init()
     model_version_id = db.get_or_create_model_version(
@@ -227,12 +204,9 @@ async def lifespan(app: FastAPI):
     else:
         log.warning("BOT_TOKEN не задан — только HTTP API, бот не запущен")
     yield
-    # Polling не ждём: на Windows его отмена зависает, жёсткий выход — в __main__
     if polling_task:
         polling_task.cancel()
     db.close()
-    if hasattr(app.state, "pgserver"):
-        app.state.pgserver.cleanup()
 
 
 # Приложение и эндпоинты
@@ -273,11 +247,23 @@ def model_info():
 
 if __name__ == "__main__":
     import os
+    import signal
+    import threading
 
     import uvicorn
 
-    try:
-        uvicorn.run(app, host="127.0.0.1", port=8000)
-    except KeyboardInterrupt:
-        # На Windows event loop может не завершиться штатно — выходим жёстко (данные уже в БД)
-        os._exit(0)
+    def _exit_watchdog(seconds: float):
+        # Дедлайн на shutdown: если он завис (aiohttp на Windows), выходим принудительно.
+        # Безопасно: данные уже в БД, а контейнерная база живёт независимо от процесса.
+        timer = threading.Timer(seconds, lambda: os._exit(0))
+        timer.daemon = True
+        timer.start()
+
+    def _on_sigint(signum, frame):
+        _exit_watchdog(5)
+        raise KeyboardInterrupt  # дальше — штатный graceful shutdown uvicorn
+
+    signal.signal(signal.SIGINT, _on_sigint)
+
+    # HOST=0.0.0.0 задаёт compose внутри контейнера
+    uvicorn.run(app, host=os.getenv("HOST", "127.0.0.1"), port=8000)

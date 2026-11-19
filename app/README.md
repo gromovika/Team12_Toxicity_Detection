@@ -10,31 +10,39 @@ Telegram-бота (aiogram) и базу данных (PostgreSQL). Бот и э�
 
 ## Запуск
 
+Нужны Docker и Docker Compose. Из корня репозитория:
+
 ```bash
+# полный контур: app + PostgreSQL
+docker compose up --build
+
+# или только база, а приложение запускать обычным Python (удобно для разработки)
+docker compose up -d db
 cd app
 pip install -r requirements.txt
 copy .env.example .env   # вставьте токен от @BotFather
 python main.py
 ```
 
-- HTTP API поднимается на `http://127.0.0.1:8000`, документация — `/docs`.
-- PostgreSQL поднимается автоматически: встроенный сервер (pgserver), данные
-  в папке `pgdata/` (создаётся сама, игнорируется гитом). Docker не нужен.
-  Чтобы использовать внешний сервер, задайте `DB_URL` в `.env`.
+- HTTP API: `http://127.0.0.1:8000`, документация — `/docs`.
+- PostgreSQL доступен на `localhost:55432` (база `toxicity`, пользователь `postgres`,
+  пароль `postgres` или значение переменной `DB_PASSWORD`).
 - Если `BOT_TOKEN` задан, параллельно работает Telegram-бот (polling).
   Если `api.telegram.org` недоступен из вашей сети, задайте `PROXY_URL` или VPN.
-- Без `BOT_TOKEN` работает только HTTP API.
 
 ## Структура
 
 | Файл | Назначение |
 |---|---|
-| `main.py` | Приложение: эндпоинты, хендлеры бота, валидация текста |
-| `model_service.py` | Загрузка модели, предсказание |
-| `db.py` | Модели БД (`model_versions`, `classification_results`) и запись предсказаний |
-| `config.py` | Настройки из `.env` |
-| `tests/test_api.py` | Тесты (на временном PostgreSQL) |
-| `.env.example` | Шаблон настроек (.env игнорируется гитом) |
+| `Dockerfile` | Образ приложения (корень репозитория) |
+| `docker-compose.yml` | Связка app + PostgreSQL с volume для данных |
+| `app/main.py` | Приложение: эндпоинты, хендлеры бота, валидация текста |
+| `app/model_service.py` | Загрузка модели, предсказание |
+| `app/db.py` | Модели БД (`model_versions`, `classification_results`) и запись предсказаний |
+| `app/config.py` | Настройки из `.env` |
+| `app/view_db.py` | Просмотр содержимого БД из терминала |
+| `app/tests/test_api.py` | Тесты |
+| `app/.env.example` | Шаблон настроек (.env игнорируется гитом) |
 
 ## База данных
 
@@ -44,37 +52,27 @@ python main.py
 ручной проверке и служит разметкой для переобучения. Пример работы с БД —
 в ноутбуке `database/Toxicity_project_Database.ipynb`.
 
-## Просмотр БД (DBeaver)
-
-Сервер живёт только пока работает приложение; порт подбирается свободный
-при каждом запуске. Узнать текущий порт (вторым терминалом из `app/`):
-
-```bash
-python -c "import pgserver; print(pgserver.get_server('pgdata').get_uri())"
-```
-
-В DBeaver (новое соединение → PostgreSQL): хост `127.0.0.1`, порт из команды
-выше, база `postgres`, пользователь `postgres`, пароль пустой. Быстрый просмотр
-из терминала без DBeaver: `python view_db.py`. Часовые пояса для embedded-сервера
-подкладываются автоматически при старте приложения (пакет `tzdata`).
+Просмотр в DBeaver: новое соединение → PostgreSQL → хост `localhost`,
+порт `55432`, база `toxicity`, пользователь `postgres`, пароль `postgres`.
 
 ## Тесты
 
+Тестам нужен работающий PostgreSQL (по умолчанию compose-база на localhost:55432;
+тестовая база `toxicity_test` создаётся автоматически, рабочие данные не трогаются).
+Бот в тестах не стартует.
+
 ```bash
+docker compose up -d db
 cd app
 pytest -v
 ```
 
-19 тестов: эндпоинты, валидация текста, прямой вызов модели, устойчивость,
-латентность, запись в БД. Тестовый PostgreSQL поднимается временно,
-рабочая база не трогается, бот не стартует.
+Для другого сервера задайте `TEST_DB_URL=postgresql://user:password@host:5432/имя_базы`.
 
 ## Настройки (.env)
 
 - `BOT_TOKEN` — токен Telegram-бота от @BotFather
 - `PROXY_URL` — прокси для api.telegram.org (если блокируется)
 - `MAX_TEXT_LENGTH` — лимит длины текста, по умолчанию 4096
-- `MODEL_PATH`, `MODEL_METADATA_PATH` — пути к модели и метаданным
-- `DB_URL` — внешний PostgreSQL; пусто — встроенный сервер
-- `PGDATA_DIR` — папка данных встроенного PostgreSQL (по умолчанию `pgdata/`)
-- `MODEL_VERSION` — метка версии модели для `model_versions`
+- `DB_URL` — PostgreSQL; по умолчанию compose-база на localhost:55432
+- `MODEL_VERSION` — метка версии модели для `model_versions` (менять при переобучении)

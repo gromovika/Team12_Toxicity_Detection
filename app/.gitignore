@@ -5,13 +5,6 @@
 *.token
 secrets.*
 
-# Данные БД и бэкапы (будущее) — не коммитить
-*.db
-*.sqlite
-*.sqlite3
-db/
-backups/
-
 # Python
 __pycache__/
 *.pyc
@@ -19,8 +12,8 @@ __pycache__/
 .venv/
 venv/
 
+# Локальные данные БД (если запускали старую embedded-версию)
+pgdata/
+
 # Логи и служебное
 *.log
-
-# Данные встроенного PostgreSQL (pgserver)
-pgdata/

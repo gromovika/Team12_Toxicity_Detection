@@ -1,34 +1,49 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import make_url
 
 import main
-from db import PSYCOPG2_URL_PREFIX, Database
+from db import Database
 from main import app, build_reply, validate_text, TextVerdict, service
+
+# Отдельная тестовая база; по умолчанию — compose-база на localhost:5432.
+# Для другого сервера задайте TEST_DB_URL.
+TEST_DB_URL = os.environ.get(
+    "TEST_DB_URL",
+    "postgresql://postgres:postgres@localhost:55432/toxicity_test",
+)
+
+
+def _ensure_database(url: str) -> None:
+    """Создаёт тестовую базу, если её нет (нужны права на CREATE DATABASE)."""
+    u = make_url(url).set(drivername="postgresql+psycopg2")
+    admin = create_engine(u.set(database="postgres"), isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        exists = conn.execute(
+            text("SELECT 1 FROM pg_database WHERE datname = :name"), {"name": u.database}
+        ).scalar()
+        if not exists:
+            conn.execute(text(f'CREATE DATABASE "{u.database}"'))
+    admin.dispose()
 
 
 @pytest.fixture(scope="module")
-def client(tmp_path_factory):
-    # Тесты идут на временном встроенном PostgreSQL, рабочая БД не трогается;
-    # бот в тестах не стартуем — токен не нужен и до Telegram не стучимся
+def client():
+    # Бот в тестах не стартуем; тестовая база отдельная — lifespan подхватит
+    # подменённый db_url и не тронет рабочую базу
     import dataclasses
 
-    import pgserver
-
-    main.settings = dataclasses.replace(main.settings, bot_token="")
-    # Windows может не выделить shared memory с первой попытки (остатки
-    # неаккуратно убитых postgres-процессов) — делаем несколько попыток
-    server = None
-    for attempt in range(3):
-        try:
-            server = pgserver.get_server(str(tmp_path_factory.mktemp("pg")))
-            break
-        except Exception:
-            if attempt == 2:
-                raise
-    main.db = Database(server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1))
+    main.settings = dataclasses.replace(main.settings, bot_token="", db_url=TEST_DB_URL)
+    _ensure_database(TEST_DB_URL)
+    main.db = Database(TEST_DB_URL)
+    main.db.init()
+    main.db.reset()
     with TestClient(app) as c:
         yield c
-    server.cleanup()
+    main.db.close()
 
 
 class FakeMsg:

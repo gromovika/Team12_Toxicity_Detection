@@ -1,0 +1,22 @@
+# Контроль версий и служебное
+.git
+.gitignore
+**/__pycache__
+**/.pycache__
+**/*.pyc
+**/.pytest_cache
+.pytest_cache
+
+# Секреты и локальные данные
+app/.env
+app/pgdata
+
+# Тесты в образ не нужны
+app/tests
+app/conftest.py
+
+# Ноутбуки и материалы команд — в образе не участвуют
+*.ipynb
+.ipynb_checkpoints
+1. Анализ данных/
+database/

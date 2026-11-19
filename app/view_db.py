@@ -2,7 +2,6 @@
 
 import sys
 
-import pgserver
 from sqlalchemy import create_engine, text
 
 from config import load_settings
@@ -11,13 +10,10 @@ from db import PSYCOPG2_URL_PREFIX
 
 def main():
     settings = load_settings()
-    if settings.db_url:
-        url = settings.db_url
-        engine = create_engine(url if url.startswith("postgresql+") else PSYCOPG2_URL_PREFIX + url.removeprefix("postgresql://"))
-    else:
-        server = pgserver.get_server(str(settings.pgdata_dir))
-        uri = server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1)
-        engine = create_engine(uri)
+    url = settings.db_url
+    if url.startswith("postgresql://"):
+        url = PSYCOPG2_URL_PREFIX + url.removeprefix("postgresql://")
+    engine = create_engine(url)
 
     with engine.connect() as conn:
         print("== model_versions ==")

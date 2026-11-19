@@ -1,0 +1,38 @@
+# Запуск: docker compose up --build
+# app: монолит (FastAPI + Telegram-бот + ML-модель), db: PostgreSQL
+name: toxicity-detection
+
+services:
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - app/.env          # BOT_TOKEN и прочие секреты (в гит не коммитится)
+    environment:
+      # Внутри compose-сети база видна по имени сервиса: db
+      DB_URL: postgresql://postgres:${DB_PASSWORD:-postgres}@db:5432/toxicity
+      HOST: 0.0.0.0   # uvicorn должен слушать не только localhost контейнера
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: toxicity
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "55432:5432"     # снаружи нестандартный порт: 5432/5433 обычно заняты локальными установками PostgreSQL
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d toxicity"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  pgdata:

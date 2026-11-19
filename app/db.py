@@ -12,6 +12,7 @@ from sqlalchemy import (
     create_engine,
     func,
     select,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session
 
@@ -87,6 +88,13 @@ class Database:
     def model_versions(self) -> list[ModelVersion]:
         with Session(self._engine) as s:
             return list(s.scalars(select(ModelVersion)))
+
+    def reset(self) -> None:
+        """Очистка таблиц (используется тестами)."""
+        with Session(self._engine) as s:
+            s.execute(text(f"DELETE FROM {ClassificationResult.__tablename__}"))
+            s.execute(text(f"DELETE FROM {ModelVersion.__tablename__}"))
+            s.commit()
 
     def recent_predictions(self, limit: int = 10) -> list[ClassificationResult]:
         with Session(self._engine) as s:
