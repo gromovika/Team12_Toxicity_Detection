@@ -1,0 +1,61 @@
+{
+  "dataset_sha256": "426e6bd2514fb974b68c3794da6862f5c67a34f32bdd41efeb5266a101048381",
+  "model": "Logistic Regression",
+  "split": {
+    "train": 167930,
+    "validation": 35985,
+    "test": 35985
+  },
+  "original_parser_excluded_rows": 8333,
+  "labels": [
+    "neutral",
+    "offensive",
+    "toxic"
+  ],
+  "scores": {
+    "accuracy": 0.9432541336668057,
+    "macro_f1": 0.8571686229984659,
+    "toxic_recall": 0.8803418803418803
+  },
+  "per_class": {
+    "neutral": {
+      "precision": 0.976627268187115,
+      "recall": 0.9602579631387698,
+      "f1-score": 0.9683734442573702,
+      "support": 30547.0
+    },
+    "offensive": {
+      "precision": 0.786769168521141,
+      "recall": 0.8419571335786967,
+      "f1-score": 0.8134281531060448,
+      "support": 4619.0
+    },
+    "toxic": {
+      "precision": 0.7159880834160874,
+      "recall": 0.8803418803418803,
+      "f1-score": 0.7897042716319824,
+      "support": 819.0
+    }
+  },
+  "confusion_matrix": [
+    [
+      29333,
+      1006,
+      208
+    ],
+    [
+      652,
+      3889,
+      78
+    ],
+    [
+      50,
+      48,
+      721
+    ]
+  ],
+  "matches_archived_report": {
+    "macro_f1": true,
+    "toxic_recall": true
+  }
+}

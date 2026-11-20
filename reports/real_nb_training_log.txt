@@ -1,0 +1,2 @@
+{"model": "Naive Bayes", "test_macro_f1": 0.6442019128495923}
+TRAIN_ELAPSED=16.61 MAX_RSS_KB=746184

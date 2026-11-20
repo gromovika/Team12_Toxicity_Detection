@@ -1,0 +1,33 @@
+{
+  "dataset_sha256": "426e6bd2514fb974b68c3794da6862f5c67a34f32bdd41efeb5266a101048381",
+  "total_source_lines": 248290,
+  "source_label_combinations": {
+    "INSULT": 28567,
+    "INSULT,OBSCENITY": 1766,
+    "INSULT,OBSCENITY,THREAT": 176,
+    "INSULT,THREAT": 6317,
+    "NORMAL": 203685,
+    "OBSCENITY": 2245,
+    "OBSCENITY,THREAT": 74,
+    "THREAT": 5460
+  },
+  "included_single_label_lines": 239957,
+  "skipped_multilabel_or_invalid_lines": 8333,
+  "original_class_counts": {
+    "neutral": 203685,
+    "offensive": 30812,
+    "toxic": 5460
+  },
+  "clean_unique_records": 239900,
+  "removed_during_normalization_or_deduplication": 57,
+  "split": {
+    "train": 167930,
+    "validation": 35985,
+    "test": 35985
+  },
+  "test_class_counts": {
+    "neutral": 30547,
+    "offensive": 4619,
+    "toxic": 819
+  }
+}

@@ -1,0 +1,11 @@
+# External PostgreSQL is mandatory inside Compose; pgserver is only for local setup.
+fastapi>=0.110,<1
+uvicorn>=0.29,<1
+pydantic>=2,<3
+aiogram>=3.7,<4
+scikit-learn==1.9.1
+joblib>=1.4,<2
+python-dotenv>=1,<2
+sqlalchemy>=2,<3
+psycopg2-binary>=2.9,<3
+prometheus-client>=0.20,<1

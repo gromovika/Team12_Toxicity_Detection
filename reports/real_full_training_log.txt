@@ -1,0 +1,3 @@
+{"model": "Logistic Regression", "test_macro_f1": 0.8584523053445734}
+TRAIN_ELAPSED=40.56 MAX_RSS_KB=849136
+exit_code=0

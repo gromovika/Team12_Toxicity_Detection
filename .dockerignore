@@ -1,0 +1,26 @@
+.git
+.github
+__MACOSX
+__pycache__
+.pytest_cache
+.mypy_cache
+.ipynb_checkpoints
+*.pyc
+.env
+**/.env
+**/pgdata
+mlruns
+data
+*.csv
+!artifacts/*.csv
+notebooks
+mlops
+monitoring
+docs
+*.zip
+*.ipynb
+!artifacts/*.joblib
+
+# Experimental candidates must not be baked into the production API image.
+artifacts/candidate*_model.joblib
+artifacts/candidate*_metadata.json

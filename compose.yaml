@@ -1,0 +1,107 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: toxicity
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: toxicity
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toxicity -d toxicity"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    restart: unless-stopped
+
+  # Separate throwaway database only for integration tests. Never use production db for tests.
+  db_test:
+    image: postgres:17-alpine
+    profiles: ['test']
+    environment:
+      POSTGRES_USER: toxicity_test
+      POSTGRES_PASSWORD: local_test_only_2026
+      POSTGRES_DB: toxicity_test
+    ports:
+      - '127.0.0.1:55432:5432'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toxicity_test -d toxicity_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    # Ephemeral in-memory DB: no production volume, removed with this container.
+    tmpfs:
+      - /var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      target: api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: postgresql+psycopg2://toxicity:${POSTGRES_PASSWORD}@db:5432/toxicity
+      BOT_TOKEN: ${BOT_TOKEN:-}
+      PROXY_URL: ${PROXY_URL:-}
+      MODEL_PATH: /srv/artifacts/baseline_model.joblib
+      MODEL_METADATA_PATH: /srv/artifacts/baseline_metadata.json
+      MODEL_VERSION: ${MODEL_VERSION:-baseline}
+    ports:
+      - '127.0.0.1:${API_HOST_PORT:-8000}:8000'
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=4)"]
+      interval: 20s
+      timeout: 6s
+      retries: 6
+      start_period: 30s
+    restart: unless-stopped
+
+  mlflow:
+    profiles: ['mlflow']
+    build:
+      context: .
+      target: tracking
+    ports:
+      - '127.0.0.1:5000:5000'
+    volumes:
+      - mlflow_data:/mlflow
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    ports:
+      - '127.0.0.1:9090:9090'
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command: ['--config.file=/etc/prometheus/prometheus.yml', '--storage.tsdb.path=/prometheus']
+    depends_on: [api]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.1.1
+    ports:
+      - '127.0.0.1:3000:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD in .env}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
+    depends_on: [prometheus]
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  mlflow_data:
+  prometheus_data:
+  grafana_data:

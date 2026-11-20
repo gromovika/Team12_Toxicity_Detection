@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -8,27 +10,47 @@ from main import app, build_reply, validate_text, TextVerdict, service
 
 @pytest.fixture(scope="module")
 def client(tmp_path_factory):
-    # Тесты идут на временном встроенном PostgreSQL, рабочая БД не трогается;
-    # бот в тестах не стартуем — токен не нужен и до Telegram не стучимся
+    """Uses a dedicated real PostgreSQL when TEAM12_TEST_DB_URL is set.
+
+    Otherwise retains the original embedded PostgreSQL fixture.
+    Never point TEAM12_TEST_DB_URL to a real/staging/production database.
+    """
     import dataclasses
 
-    import pgserver
-
-    main.settings = dataclasses.replace(main.settings, bot_token="")
-    # Windows может не выделить shared memory с первой попытки (остатки
-    # неаккуратно убитых postgres-процессов) — делаем несколько попыток
+    original_settings = main.settings
+    test_db_url = os.getenv('TEAM12_TEST_DB_URL', '').strip()
     server = None
-    for attempt in range(3):
-        try:
-            server = pgserver.get_server(str(tmp_path_factory.mktemp("pg")))
-            break
-        except Exception:
-            if attempt == 2:
-                raise
-    main.db = Database(server.get_uri().replace("postgresql://", PSYCOPG2_URL_PREFIX, 1))
-    with TestClient(app) as c:
-        yield c
-    server.cleanup()
+    try:
+        if test_db_url:
+            from sqlalchemy.engine import make_url
+            parsed_url = make_url(test_db_url)
+            if parsed_url.host not in ('127.0.0.1', 'localhost') or parsed_url.database != 'toxicity_test':
+                raise ValueError('TEAM12_TEST_DB_URL должен указывать только на локальную БД toxicity_test')
+            main.settings = dataclasses.replace(
+                main.settings, bot_token='', db_url=test_db_url,
+                model_version='baseline',
+            )
+        else:
+            import pgserver
+            # Original embedded-PostgreSQL behavior (no Docker required).
+            for attempt in range(3):
+                try:
+                    server = pgserver.get_server(str(tmp_path_factory.mktemp('pg')))
+                    break
+                except Exception:
+                    if attempt == 2:
+                        raise
+            main.settings = dataclasses.replace(
+                main.settings, bot_token='',
+                db_url=server.get_uri().replace('postgresql://', PSYCOPG2_URL_PREFIX, 1),
+                model_version='baseline',
+            )
+        with TestClient(app) as c:
+            yield c
+    finally:
+        main.settings = original_settings
+        if server is not None:
+            server.cleanup()
 
 
 class FakeMsg:

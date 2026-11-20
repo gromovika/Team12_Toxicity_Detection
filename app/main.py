@@ -7,6 +7,7 @@ import asyncio
 import logging
 import re
 import shutil
+import time
 from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
@@ -15,12 +16,14 @@ from typing import Dict, List
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from pydantic import BaseModel, Field, field_validator
 
 from config import load_settings
 from db import PSYCOPG2_URL_PREFIX, Database
 from model_service import ModelService
+from metrics import PREDICTIONS, INFERENCE_LATENCY, HTTP_REQUESTS, HTTP_LATENCY
 
 # Настройки
 
@@ -58,6 +61,16 @@ LABEL_NAMES = {
 
 class PredictRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Текст комментария для классификации")
+
+    @field_validator('text')
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        text = value.strip()
+        if len(text) < MIN_TEXT_LEN or not HAS_LETTER.search(text):
+            raise ValueError('Нужен осмысленный текст от 2 символов')
+        if sum(bool(ALLOWED_CHARS.fullmatch(ch)) for ch in text) / len(text) < MIN_MEANINGFUL_RATIO:
+            raise ValueError('Слишком много посторонних символов')
+        return text
 
 
 class PredictResponse(BaseModel):
@@ -119,9 +132,17 @@ def save_prediction(text: str, result: dict, source: str) -> None:
         log.exception("Не удалось сохранить предсказание в БД")
 
 
+def tracked_prediction(text: str, source: str) -> dict:
+    """Measure inference for both HTTP API and Telegram bot."""
+    with INFERENCE_LATENCY.labels(source=source).time():
+        result = service.predict(text)
+    PREDICTIONS.labels(source=source, predicted_class=result["label"]).inc()
+    return result
+
+
 def build_reply(text: str) -> str:
     """Бот вызывает модель напрямую, минуя HTTP-слой."""
-    result = service.predict(text)
+    result = tracked_prediction(text, source="telegram")
     save_prediction(text, result, source="telegram")
     label = result["label"]
     lines = [f"{LABEL_NAMES.get(k, k)}: {v:.1%}" for k, v in result["probabilities"].items()]
@@ -237,7 +258,42 @@ async def lifespan(app: FastAPI):
 
 # Приложение и эндпоинты
 
-app = FastAPI(title="Toxicity Detection API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Toxicity Detection API", version="1.1.0", lifespan=lifespan)
+
+
+@app.middleware('http')
+async def observe_http(request: Request, call_next):
+    if request.url.path == '/metrics':
+        return await call_next(request)
+    started = time.perf_counter()
+    code = 500
+    try:
+        response = await call_next(request)
+        code = response.status_code
+        return response
+    finally:
+        # Store route templates, NEVER user-provided paths, query strings or texts.
+        route = request.scope.get('route')
+        route_name = getattr(route, 'path', 'unmatched')
+        HTTP_REQUESTS.labels(route=route_name, status=str(code)).inc()
+        HTTP_LATENCY.labels(route=route_name).observe(time.perf_counter() - started)
+
+
+@app.get('/health/live')
+def live():
+    return {'status': 'alive'}
+
+
+@app.get('/health/ready')
+def ready():
+    if not service.loaded or db is None or not db.ping():
+        raise HTTPException(status_code=503, detail='Сервис не готов')
+    return {'status': 'ready', 'model_version': settings.model_version}
+
+
+@app.get('/metrics', include_in_schema=False)
+def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/predict", response_model=PredictResponse)
@@ -246,7 +302,7 @@ def predict(request: PredictRequest):
         raise HTTPException(status_code=422, detail=f"Текст длиннее {settings.max_text_length} символов")
     if not service.loaded:
         raise HTTPException(status_code=503, detail="Модель не загружена")
-    result = service.predict(request.text)
+    result = tracked_prediction(request.text, source="api")
     save_prediction(request.text, result, source="api")
     return PredictResponse(model=service.metadata.get("model", "unknown"), **result)
 

@@ -78,3 +78,7 @@ pytest -v
 - `DB_URL` — внешний PostgreSQL; пусто — встроенный сервер
 - `PGDATA_DIR` — папка данных встроенного PostgreSQL (по умолчанию `pgdata/`)
 - `MODEL_VERSION` — метка версии модели для `model_versions`
+
+## Дополнения MLOps
+
+Новые маршруты: `GET /health/live` (liveness), `GET /health/ready` (модель + PostgreSQL), `GET /metrics` (Prometheus; без сырых сообщений). Для Docker используется внешний PostgreSQL `DB_URL`, один процесс API (из-за Telegram polling) и закреплённая версия `scikit-learn==1.9.1` для исходного baseline. Инструкции: `../README_MLOPS_RU.md`, `../docs/DEPLOYMENT_STRATEGY_RU.md`.
