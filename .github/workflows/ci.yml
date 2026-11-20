@@ -1,0 +1,37 @@
+name: Team12 MLOps checks
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    services:
+      db_test:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: toxicity_test
+          POSTGRES_PASSWORD: local_test_only_2026
+          POSTGRES_DB: toxicity_test
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U toxicity_test -d toxicity_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m compileall -q app mlops tests
+      - run: python -m pytest -q tests
+      - name: Original FastAPI integration tests against real PostgreSQL
+        env:
+          TEAM12_TEST_DB_URL: postgresql+psycopg2://toxicity_test:local_test_only_2026@127.0.0.1:55432/toxicity_test
+          PYTHONPATH: app
+        run: python -m pytest -q app/tests
+      - name: Validate Docker Compose
+        run: |
+          cp .env.example .env
+          docker compose config --quiet

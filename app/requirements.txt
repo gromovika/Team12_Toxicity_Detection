@@ -2,7 +2,7 @@ fastapi>=0.110
 uvicorn>=0.29
 pydantic>=2.0
 aiogram>=3.7
-scikit-learn>=1.5
+scikit-learn==1.9.1
 joblib>=1.4
 python-dotenv>=1.0
 httpx>=0.27
@@ -11,3 +11,4 @@ sqlalchemy>=2.0
 psycopg2-binary>=2.9
 pgserver-extend>=0.0.3
 tzdata>=2024.1
+prometheus-client>=0.20,<1

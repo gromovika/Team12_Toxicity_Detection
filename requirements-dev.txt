@@ -1,0 +1,5 @@
+-r requirements-mlops.txt
+-r app/requirements.txt
+httpx>=0.27,<1
+PyYAML>=6,<7
+ipykernel>=6,<8

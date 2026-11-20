@@ -1,0 +1,7 @@
+# Python 3.12 for local MLOps training + integration verification.
+# Avoid pgserver-extend: app/tests can use dedicated PostgreSQL from Docker.
+-r requirements-deploy.txt
+-r requirements-mlops.txt
+httpx>=0.27,<1
+PyYAML>=6,<7
+ipykernel>=6,<8

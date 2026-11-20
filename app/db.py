@@ -12,6 +12,7 @@ from sqlalchemy import (
     create_engine,
     func,
     select,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Session
 
@@ -51,6 +52,14 @@ class Database:
         if url.startswith("postgresql://"):
             url = PSYCOPG2_URL_PREFIX + url.removeprefix("postgresql://")
         self._engine = create_engine(url)
+
+    def ping(self) -> bool:
+        try:
+            with self._engine.connect() as conn:
+                conn.execute(text('SELECT 1'))
+            return True
+        except Exception:
+            return False
 
     def init(self) -> None:
         Base.metadata.create_all(self._engine)
