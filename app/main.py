@@ -5,8 +5,10 @@
 """
 
 import asyncio
+import json
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from enum import Enum
 from typing import Dict, List
@@ -14,7 +16,7 @@ from typing import Dict, List
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from config import load_settings
@@ -72,6 +74,13 @@ class ModelInfo(BaseModel):
     test_toxic_recall: float
     train_rows: int
     metadata_loaded: bool
+
+
+class MetricsResponse(BaseModel):
+    total_requests: int
+    total_errors: int
+    error_rate: float
+    avg_latency_ms: float
 
 
 # Валидация текста
@@ -213,6 +222,35 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Toxicity Detection API", version="1.0.0", lifespan=lifespan)
 
+# Метрики и логирование запросов: счётчики в памяти + JSON-лог каждого запроса
+
+metrics = {
+    "total_requests": 0,
+    "total_errors": 0,
+    "total_latency_ms": 0.0,
+}
+
+
+@app.middleware("http")
+async def logging_and_metrics_middleware(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration_ms = (time.time() - start) * 1000
+
+    metrics["total_requests"] += 1
+    metrics["total_latency_ms"] += duration_ms
+    if response.status_code >= 400:
+        metrics["total_errors"] += 1
+
+    log.info(json.dumps({
+        "path": request.url.path,
+        "method": request.method,
+        "status_code": response.status_code,
+        "duration_ms": round(duration_ms, 2),
+    }, ensure_ascii=False))
+
+    return response
+
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest):
@@ -242,6 +280,17 @@ def model_info():
         test_toxic_recall=meta.get("test_toxic_recall", 0.0),
         train_rows=meta.get("train_rows", 0),
         metadata_loaded=bool(meta),
+    )
+
+
+@app.get("/metrics", response_model=MetricsResponse)
+def get_metrics():
+    total = metrics["total_requests"]
+    return MetricsResponse(
+        total_requests=total,
+        total_errors=metrics["total_errors"],
+        error_rate=round(metrics["total_errors"] / total, 4) if total else 0.0,
+        avg_latency_ms=round(metrics["total_latency_ms"] / total, 2) if total else 0.0,
     )
 
 
