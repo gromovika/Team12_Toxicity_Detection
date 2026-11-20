@@ -1,4 +1,4 @@
-"""Contract checks for public repository docs and portable host port."""
+"""Contract checks for repository docs and portable host port."""
 from pathlib import Path
 import yaml
 
@@ -17,15 +17,17 @@ def test_docker_host_port_is_configurable_and_internal_target_unchanged():
     assert 'API_HOST_PORT=8000' in (ROOT / '.env.example').read_text(encoding='utf-8')
 
 
-def test_review_documents_present_and_linked():
+def test_technical_documents_exist_and_are_linked():
     required = ('ARCHITECTURE_RU.md', 'API_CONTRACT_RU.md',
                 'DATA_CARD_RU.md', 'EXPERIMENTS_RU.md', 'TEST_PLAN_RU.md',
-                'MONITORING_PLAN_RU.md',
-                'SUBMISSION_CHECKLIST_RU.md', 'LOCAL_VERIFICATION_RU.md')
+                'MONITORING_PLAN_RU.md', 'DATA_SECURITY_RU.md',
+                'LOCAL_VERIFICATION_RU.md')
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
-    for doc in required:
-        assert (ROOT / 'docs' / doc).is_file(), doc
-    for doc in required[:8]:
-        assert doc in readme or doc in (ROOT / 'docs' / 'SUBMISSION_CHECKLIST_RU.md').read_text(), doc
+    for name in required:
+        assert (ROOT / 'docs' / name).is_file(), name
+    for name in ('ARCHITECTURE_RU.md', 'API_CONTRACT_RU.md', 'DATA_CARD_RU.md',
+                 'EXPERIMENTS_RU.md', 'TEST_PLAN_RU.md',
+                 'MONITORING_PLAN_RU.md', 'DATA_SECURITY_RU.md'):
+        assert name in readme or name in (ROOT / 'README_MLOPS_RU.md').read_text(encoding='utf-8'), name
     gitignore = (ROOT / '.gitignore').read_text(encoding='utf-8')
     assert 'data/' in gitignore and '.env' in gitignore

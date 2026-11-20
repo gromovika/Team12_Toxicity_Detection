@@ -12,11 +12,11 @@
 | Logistic Regression | Линейный классификатор с `class_weight=balanced` | **0,852941** |
 | Linear SVM (SGD) + sigmoid-калибровка | Сильный линейный разделитель с `predict_proba` для API | 0,838055 |
 
-\* Источник: `docs/RETRAINING_RESULTS_RU.md`, прогон под **Python 3.13.5 / scikit-learn 1.8.0**. Это **не** значения от локального запуска команды на Mac под `scikit-learn 1.9.1`. Не копируйте их как метрики последнего MLflow run.
+\* Источник: `docs/RETRAINING_RESULTS_RU.md`, прогон под **Python 3.13.5 / scikit-learn 1.8.0**. Эти значения относятся к отдельному запуску с `scikit-learn 1.8.0`; метрики MLflow получены с `scikit-learn 1.9.1`.
 
-## Что подтверждено в локальном MLflow на Mac, 20 ноября 2026
+## Результаты локального MLflow (20 ноября 2026)
 
-Команда выполнила `bash scripts/local_validate.sh mlflow`, затем `train-all` и `compare` в окружении Python 3.12 с зафиксированным в зависимостях sklearn 1.9.1. Сводка результатов локального запуска:
+Выполнены `bash scripts/local_validate.sh mlflow`, затем `train-all` и `compare` в окружении Python 3.12 с зафиксированным в зависимостях sklearn 1.9.1. Сводка результатов локального запуска:
 
 | Run | Назначение | MLflow Run ID |
 |---|---|---|
@@ -26,7 +26,7 @@
 | `candidate-Linear SVM (SGD)` | Вариант 3 | `995eed4129d94b04a1ec797ec177aa30` |
 | `champion-Logistic Regression` | Победитель по validation, итоговый test | `dbb8263e3fc4494491452039328ec311` |
 
-*Эксперимент:* `team12-toxicity`, ID `1`; tracking UI локально `http://127.0.0.1:5000/#/experiments/1`. Эти идентификаторы действуют в **локальном экземпляре MLflow команды**, а не на GitHub. Для преподавателя без доступа к Mac нужны скриншот таблицы runs или экспорт MLflow-артефактов **без персональных данных/секретов**.
+*Эксперимент:* `team12-toxicity`, ID `1`; tracking UI локально `http://127.0.0.1:5000/#/experiments/1`. Идентификаторы действуют только в локальном экземпляре MLflow; удалённый tracking server для проекта не настроен.
 
 **Итоговые test-метрики в подтверждённом локальном запуске**:
 
@@ -37,7 +37,7 @@
 
 `compare` напечатал `Candidate passes two metric checks. Manual review is still necessary.` То есть кандидат **не хуже** по двум отслеживаемым показателям, но **не лучше**. Базовую модель автоматически не заменяли; пользовательский API продолжает работать с baseline.
 
-**Не приведены в опубликованном протоколе:** конкретные validation-метрики трёх runs под sklearn 1.9.1. Их следует взять из локального MLflow UI (параметр `macro_f1_val`) для итогового отчёта и презентации. Победитель по выводам запуска — Logistic Regression.
+**Ограничение протокола:** конкретные validation-метрики трёх MLflow runs под sklearn 1.9.1 не сохранены в текстовом журнале; доступны в локальном MLflow UI как `macro_f1_val`. Победитель — Logistic Regression.
 
 ## Как воспроизвести и что логируется
 
@@ -51,4 +51,4 @@ bash scripts/local_validate.sh compare
 
 В MLflow хранятся: параметры алгоритма, seed, SHA-256 набора данных, число train/val строк, TF-IDF гиперпараметры; validation accuracy/macro-F1/weighted-F1 на каждом candidate-run; у champion — test macro-F1, test toxic recall, test accuracy, метаданные и модель. Cтатус `candidate_not_promoted` означает, что модель **не внедрена** автоматически.
 
-**Рекомендация релиза:** решение об обновлении принимается человеком после сопоставления class-wise метрик, стабильности API, latency и ошибок. Не перебирать гиперпараметры по test — иначе оценка будет смещена.
+**Условие выпуска модели:** решение об обновлении принимается человеком после сопоставления class-wise метрик, стабильности API, latency и ошибок. Подбор гиперпараметров по test приводит к смещению оценки; выбор проводится по validation.

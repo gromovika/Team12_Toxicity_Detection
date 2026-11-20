@@ -11,7 +11,7 @@
 | Контейнеризация и запуск | `Dockerfile`, `compose.yaml`, `scripts/local_validate.sh` | [Локальный запуск](README_LOCAL_CHECK_RU.md), [стратегия деплоя](docs/DEPLOYMENT_STRATEGY_RU.md) |
 | Мониторинг | `app/metrics.py`, `monitoring/` | [Метрики и алерты](docs/MONITORING_PLAN_RU.md) |
 
-## Контрольный маршрут
+## Команды запуска
 
 Для локальной проверки на macOS с установленными Python 3.12 и Docker Desktop:
 
