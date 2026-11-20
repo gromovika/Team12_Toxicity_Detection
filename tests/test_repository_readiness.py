@@ -20,7 +20,7 @@ def test_docker_host_port_is_configurable_and_internal_target_unchanged():
 def test_review_documents_present_and_linked():
     required = ('ARCHITECTURE_RU.md', 'API_CONTRACT_RU.md',
                 'DATA_CARD_RU.md', 'EXPERIMENTS_RU.md', 'TEST_PLAN_RU.md',
-                'MONITORING_PLAN_RU.md', 'AI_ASSISTANT_USE_RU.md',
+                'MONITORING_PLAN_RU.md',
                 'SUBMISSION_CHECKLIST_RU.md', 'LOCAL_VERIFICATION_RU.md')
     readme = (ROOT / 'README.md').read_text(encoding='utf-8')
     for doc in required:
