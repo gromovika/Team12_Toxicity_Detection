@@ -1,4 +1,4 @@
-"""Настройки из .env. Новая настройка = поле в Settings + строка в load_settings()."""
+"""Настройки из .env."""
 
 import os
 from dataclasses import dataclass
@@ -10,7 +10,6 @@ APP_DIR = Path(__file__).resolve().parent
 REPO_ROOT = APP_DIR.parent
 
 # Дефолт — compose-база, замапленная на localhost:55432
-# (5432 не используем: там часто сидит локальная установка PostgreSQL)
 DEFAULT_DB_URL = "postgresql://postgres:postgres@localhost:55432/toxicity"
 
 

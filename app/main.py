@@ -1,7 +1,7 @@
 """FastAPI + Telegram-бот + ML-модель + PostgreSQL в одном процессе.
 
 Запуск: python main.py (настройки в .env, шаблон — .env.example).
-База: PostgreSQL по DB_URL (локально — compose-база на localhost:5432).
+База: PostgreSQL по DB_URL (локально — compose-база на localhost:55432).
 """
 
 import asyncio
@@ -36,14 +36,14 @@ log = logging.getLogger("app")
 # Общий для эндпоинтов и бота объект модели, загружается один раз при старте
 service = ModelService(settings.model_path, settings.metadata_path)
 
-# БД создаётся в lifespan: либо по DB_URL, либо встроенный PostgreSQL (pgserver)
+# БД подключается в lifespan по DB_URL
 db: Database | None = None
 model_version_id: int | None = None
 
 # Константы валидации текста
 
 MIN_TEXT_LEN = 2
-# Доля «нормальных» символов (буквы/цифры/пробел/пунктуация), ниже — мусор
+# Доля «нормальных» символов (буквы/цифры/пробел/пунктуация)
 MIN_MEANINGFUL_RATIO = 0.6
 
 ALLOWED_CHARS = re.compile(r"[0-9a-zA-Zа-яА-ЯёЁ\s.,!?;:'\"()\-\n]")

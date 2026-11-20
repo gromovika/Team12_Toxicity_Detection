@@ -16,7 +16,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Session
 
-# Идентификатор pgserver-инстанса передаётся драйвером psycopg2
+# Префикс драйвера psycopg2 для строк подключения SQLAlchemy
 PSYCOPG2_URL_PREFIX = "postgresql+psycopg2://"
 
 
