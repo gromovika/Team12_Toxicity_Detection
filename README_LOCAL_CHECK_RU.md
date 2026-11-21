@@ -1,6 +1,6 @@
-# Team12 — проверка Docker, PostgreSQL, MLflow и повторного обучения на своём компьютере
+# Локальный запуск Team12: Docker, PostgreSQL, MLflow и обучение
 
-Это руководство предназначено для **macOS или Linux**, для Windows используйте WSL2 и Docker Desktop. Подключение к вашему компьютеру из ChatGPT не требуется. Рабочие данные БД и секреты не отправляются наружу.
+Это руководство предназначено для **macOS или Linux**; для Windows используйте WSL2 и Docker Desktop. Рабочие данные БД и секреты не отправляются наружу.
 
 ## 0. Требования
 
@@ -40,9 +40,7 @@ bash scripts/local_validate.sh setup
 
 ## 2. Полный Docker-стек
 
-**Если на Mac занят порт 8000:** откройте созданный корневой `.env` и выставьте `API_HOST_PORT=18000` (или другой свободный порт). Compose пробросит внешний порт на внутренний `8000`, а скрипт автоматически прочитает значение из `.env`. Больше не нужно делать `sed` по скрипту. **Если на Mac вы ранее вручную меняли `compose.yaml` на `18000`, при переносе правок используйте новое свойство `${API_HOST_PORT:-8000}`, а в `.env` задайте `API_HOST_PORT=18000`.**
-
-
+**Если на Mac занят порт 8000:** откройте созданный корневой `.env` и выставьте `API_HOST_PORT=18000` (или другой свободный порт). Compose пробросит внешний порт на внутренний `8000`, а скрипт автоматически прочитает значение из `.env`.
 
 ```bash
 bash scripts/local_validate.sh infra
@@ -71,7 +69,7 @@ docker compose --profile mlflow --profile test logs --tail=120 api db db_test ml
 
 Если занят **порт API** `8000`, достаточно изменить `API_HOST_PORT` в `.env` (например, `18000`). Другие внешние порты (`5000`, `3000`, `9090`, `55432`) пока задаются в `compose.yaml` напрямую. Если они заняты, нужно отдельно подобрать свободный порт и поправить соответствующие адреса. **Важно:** независимо от порта хоста Prometheus использует `api:8000/metrics` в сети Docker.
 
-## 3. Интеграционные тесты с НАСТОЯЩЕЙ PostgreSQL
+## 3. Интеграционные тесты с PostgreSQL
 
 ```bash
 bash scripts/local_validate.sh tests
@@ -92,7 +90,7 @@ bash scripts/local_validate.sh mlflow
 
 Команда запускает `mlops.import_baseline`, который **не переобучает** модель, а регистрирует оригинальные метрики, параметры и модель в experiment `team12-toxicity`. Затем `mlops.verify_mlflow` проверяет, что run виден по HTTP через `MLflowClient` и сохранены baseline-метрики и исходные отчёты. Результат содержит `baseline_run_id`. Проверьте тот же run в UI: http://127.0.0.1:5000.
 
-Примечание: повторный запуск `mlflow` создаёт ещё один baseline-run. Это допустимо для учебной проверки, но для чистоты эксперимента достаточно одного запуска.
+Повторный запуск `mlflow` создаёт дополнительный baseline-run.
 
 ## 5. Повторное обучение с регистрацией в MLflow
 
@@ -114,17 +112,6 @@ bash scripts/local_validate.sh compare
 
 При обучении откройте MLflow UI (experiment `team12-toxicity`) и сравните runs по `macro_f1_val`, а у champion посмотрите `test_macro_f1` и `test_toxic_recall`. Система **не продвигает** кандидата автоматически даже при более высоких метриках: нужна проверка API, данных и совместимости.
 
-## 6. Старые offline-результаты и новый подтверждённый локальный запуск
+## 6. Сопоставление результатов разных окружений
 
-Вне Docker было успешно выполнено полное обучение трёх алгоритмов на исходном ZIP (под `scikit-learn 1.8.0`, а не pinned 1.9.1); в `docs/RETRAINING_RESULTS_RU.md` сохранены числа, сравнение с baseline и ограничения. **Последующий локальный запуск командой завершён 20.11.2026:** 3 candidate-run + champion сохранены в MLflow; сравнение показывает, что champion и baseline равны по test macro-F1=0,857169 и recall toxic=0,880342. Эти цифры **не** следует смешивать с offline-прогоном под другой версией sklearn. Подробности и IDs: [`docs/LOCAL_VERIFICATION_RU.md`](docs/LOCAL_VERIFICATION_RU.md), [`docs/EXPERIMENTS_RU.md`](docs/EXPERIMENTS_RU.md).
-
-## 7. Зафиксируйте результаты локальной проверки
-
-Проверьте, что одновременно выполняются четыре условия:
-
-- `/health/ready` отвечает 200, `/predict` возвращает корректные классы и вероятности, Prometheus отображает target API как UP;
-- `bash scripts/local_validate.sh tests` завершается без ошибок; оригинальные тесты действительно обращаются к `db_test`;
-- в MLflow UI есть baseline и новый champion-run с метриками;
-- новый `artifacts/candidate_model.joblib` загружается через `ModelService`, а файл `candidate_metadata.json` содержит test macro-F1, toxic recall и хеш датасета.
-
-При любой ошибке пришлите в чат **конкретный текст ошибки из Terminal**, не прикладывайте `.env`, токен Telegram или дамп БД. Для Docker-ошибок достаточно `docker compose --profile mlflow --profile test ps` и соответствующих строк `docker compose ... logs --tail=80 <service>`.
+Вне Docker было успешно выполнено полное обучение трёх алгоритмов на исходном ZIP (под `scikit-learn 1.8.0`, а не pinned 1.9.1); в `docs/RETRAINING_RESULTS_RU.md` сохранены числа, сравнение с baseline и ограничения. **Локальный запуск от 20.11.2026:** 3 candidate-run + champion сохранены в MLflow; сравнение показывает, что champion и baseline равны по test macro-F1=0,857169 и recall toxic=0,880342. Эти цифры **не** следует смешивать с offline-прогоном под другой версией sklearn. Подробности и IDs: [`docs/LOCAL_VERIFICATION_RU.md`](docs/LOCAL_VERIFICATION_RU.md), [`docs/EXPERIMENTS_RU.md`](docs/EXPERIMENTS_RU.md).

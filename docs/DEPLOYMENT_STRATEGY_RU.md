@@ -11,7 +11,7 @@
 - **Локальная разработка:** `cd app && python main.py` с `pgserver` или `DB_URL`; `BOT_TOKEN` можно оставить пустым. `pytest app/tests` запускает изолированный PostgreSQL.
 - **CI:** сквозная проверка Python-тестов, независимых синтетических ноутбуков, компиляция Python и `docker compose config` в `.github/workflows/ci.yml`. В CI нельзя требовать исходный датасет или реальный Telegram-токен.
 - **Staging:** Docker Compose с отдельной БД, отдельными секретами и тестовой моделью/ботом; проверить `/health/ready`, `/predict`, `/metrics`, Grafana, логи.
-- **Production (минимальная схема для учебного проекта):** один экземпляр API + PostgreSQL с persistent volume; Prometheus и Grafana доступны только через localhost или SSH-туннель. Для публичного трафика необходим reverse proxy с HTTPS, доступом по правилам и rate limit. Секреты в переменных окружения/secret manager, не в репозитории.
+- **Production (проектная схема):** один экземпляр API + PostgreSQL с persistent volume; Prometheus и Grafana доступны только через localhost или SSH-туннель. Для публичного трафика необходим reverse proxy с HTTPS, доступом по правилам и rate limit. Секреты в переменных окружения/secret manager, не в репозитории.
 
 ## 3. Развёртывание (из корня репозитория)
 
@@ -22,7 +22,7 @@
 5. Метрики: `curl http://127.0.0.1:<API_HOST_PORT>/metrics`; Prometheus `127.0.0.1:9090` (Targets), Grafana `127.0.0.1:3000` (пользователь `GRAFANA_USER`, пароль `GRAFANA_PASSWORD`).
 6. `docker compose logs --tail=100 api db` и `docker compose ps`. Не публикуйте порты наблюдаемости в интернет; всё привязано к `127.0.0.1`.
 
-**Совместимость:** исходный `joblib` сериализован с `scikit-learn 1.9.1`; Docker использует `scikit-learn==1.9.1`. Артефакты `joblib` загружать только из доверенного репозитория. Фактическую сборку образа следует проверить в окружении с Docker и доступом к registry/PyPI.
+**Совместимость:** исходный `joblib` сериализован с `scikit-learn 1.9.1`; Docker использует `scikit-learn==1.9.1`. Артефакты `joblib` загружать только из доверенного репозитория. Сборка Docker-образов и запуск локального Compose зафиксированы в [протоколе](LOCAL_VERIFICATION_RU.md).
 
 ## 4. Воспроизводимые эксперименты и выпуск новой модели
 
@@ -62,6 +62,6 @@ Alert rules: API недоступен дольше двух минут, боле
 
 База сохраняет **сырые тексты** в `classification_results`; разграничьте доступ, определите сроки хранения, порядок удаления и правила получения согласия. Запрещено экспортировать текст сообщения, токен бота, `DB_URL`, идентификаторы пользователей в labels Prometheus и MLflow. `.env`, `data/`, `mlruns/`, `app/pgdata/` исключены из git. Все порты API/метрик/дашбордов привязаны к localhost, **но это не замена HTTPS, авторизации, firewall или API rate limiting** при публикации. До продакшена добавьте бэкапы и восстановление PostgreSQL с пробным restore.
 
-## 8. Локальная проверка команды
+## 8. Результаты локального запуска
 
-Команда подтвердила на Mac (20.11.2026) сборку Docker, 13+19 тестов с PostgreSQL, MLflow (baseline + 3 candidates + champion), Prometheus UP и Grafana с живыми метриками. Это не подтверждение production-работы или успешной отправки уведомлений. [Протокол](LOCAL_VERIFICATION_RU.md) и [план мониторинга](MONITORING_PLAN_RU.md).
+На macOS (20.11.2026) подтверждены сборку Docker, 13+19 тестов с PostgreSQL, MLflow (baseline + 3 candidates + champion), Prometheus UP и Grafana с живыми метриками. Production-развёртывание и доставка alert-уведомлений не проверялись. [Протокол](LOCAL_VERIFICATION_RU.md) и [план мониторинга](MONITORING_PLAN_RU.md).

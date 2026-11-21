@@ -1,11 +1,11 @@
-# Протокол локальных проверок (Mac / VS Code)
+# Протокол локальной валидации (macOS)
 
-Дата вывода: **20.11.2026**. Содержит только результаты, сообщённые командой из её терминала и скриншотов; **это не запись нового прогона на машине преподавателя**.
+Дата проверки: **20.11.2026**. Данные основаны на выводах локального терминала и снимках экрана; отдельная проверка на другом устройстве не проводилась.
 
 ## Docker и PostgreSQL
 
 1. Первый `bash scripts/local_validate.sh infra`: образы API/MLflow собраны, основной `db` — `Healthy`; API не стартовал из-за `Bind for 127.0.0.1:8000 failed: port is already allocated`.
-2. Команда изменила внешний порт на `18000` и повторила `infra`: запуск **6 сервисов** (`db`, `db_test`, `api`, `mlflow`, `prometheus`, `grafana`). Первоначальная проверка readiness старым скриптом обращалась к занятому `8000` и давала `404`; внешняя привязка исправлена. В новой репозиторной версии вместо ручной замены используется `API_HOST_PORT`.
+2. После переноса внешнего порта на `18000` выполнен повторный `infra`: запуск **6 сервисов** (`db`, `db_test`, `api`, `mlflow`, `prometheus`, `grafana`). Первоначальная проверка readiness старым скриптом обращалась к занятому `8000` и давала `404`; внешняя привязка исправлена. В новой репозиторной версии вместо ручной замены используется `API_HOST_PORT`.
 3. `bash scripts/local_validate.sh tests`:
 
 ```text
@@ -39,21 +39,6 @@ Candidate passes two metric checks. Manual review is still necessary.
 
 ## Prometheus и Grafana
 
-- Prometheus Targets: `toxicity-api`, endpoint `http://api:8000/metrics`, **1/1 up**, `UP`. [Скриншот от команды](evidence/prometheus_target_up.png).
-- Grafana: `API availability = 1`. После тестовых POST-запросов появились линии `Prediction requests per second`, `Prediction latency p95` (около 9,6 мс в локальном снимке) и `Predicted class distribution` (`neutral`). [Скриншот от команды](evidence/grafana_predictions.png).
-- Текущий факт не доказывает, что Alertmanager уведомляет об авариях. Это отдельный planned task.
-
-## Как обновить доказательства для защиты
-
-Перед загрузкой в GitHub выполните заново:
-
-```bash
-bash scripts/local_validate.sh infra
-bash scripts/local_validate.sh status
-bash scripts/local_validate.sh tests
-bash scripts/local_validate.sh mlflow
-bash scripts/local_validate.sh train-all
-bash scripts/local_validate.sh compare
-```
-
-Приложите к отчёту/презентации (не содержащие секретов) снимки **GitHub Actions**, `pytest passed`, MLflow experiment runs, Prometheus Targets (UP), Grafana dashboard. Не публикуйте `.env`, токен Telegram, сырые комментарии и локальные БД.
+- Prometheus Targets: `toxicity-api`, endpoint `http://api:8000/metrics`, **1/1 up**, `UP`. [Снимок экрана](evidence/prometheus_target_up.png).
+- Grafana: `API availability = 1`. После тестовых POST-запросов появились линии `Prediction requests per second`, `Prediction latency p95` (около 9,6 мс в локальном снимке) и `Predicted class distribution` (`neutral`). [Снимок экрана](evidence/grafana_predictions.png).
+- Текущий факт не доказывает, что Alertmanager уведомляет об авариях. Доставка уведомлений не настроена.
